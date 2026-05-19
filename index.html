@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>RK Health – Patient Reminder Assistant</title>
+<meta name="description" content="Patient Appointment & Medication Reminder – RK Health"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Inter:wght@400;500;600&display=swap"/>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════
+     SETUP WIZARD  (first-time URL configuration)
+══════════════════════════════════════════════════ -->
+<div id="setup-screen" class="fullscreen-center hidden">
+  <div class="setup-card">
+    <div class="setup-icon">⚙️</div>
+    <h1>Connect Your Backend</h1>
+    <p class="setup-sub">Paste your Google Apps Script Web App URL below. You only need to do this once.</p>
+    <div class="setup-steps">
+      <div class="step"><span class="step-num">1</span>Open your Google Sheet → <strong>Extensions → Apps Script</strong></div>
+      <div class="step"><span class="step-num">2</span>Paste <code>Code.gs</code> → <strong>Deploy → New Deployment → Web App</strong></div>
+      <div class="step"><span class="step-num">3</span>Set <em>Execute as: Me</em>, <em>Who has access: Anyone</em> → Deploy</div>
+      <div class="step"><span class="step-num">4</span>Copy the URL that starts with <code>https://script.google.com/macros/s/...</code></div>
+    </div>
+    <label for="setup-url">Apps Script Web App URL</label>
+    <input type="url" id="setup-url" placeholder="https://script.google.com/macros/s/AKfycbybzQAUqdD_9B74sg5V2CW_Ouunq2DQrrI3R6CUz7krlEmOIJKi_xmEgrneoa0naYl7RA/exec"/>
+    <button onclick="saveSetup()" id="setup-btn">Connect & Continue →</button>
+    <p id="setup-error" class="setup-error hidden">Please enter a valid Apps Script URL.</p>
+    <p class="setup-hint">This URL is saved in your browser — no server, no code changes needed.</p>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     LOCK SCREEN
+══════════════════════════════════════════════════ -->
+<div id="lock-screen" class="fullscreen-center hidden">
+  <div class="lock-card">
+    <div class="lock-icon">🏥</div>
+    <h1>RK Health</h1>
+    <p class="lock-sub">Patient Appointment & Medication Reminder</p>
+    <input type="password" id="pin-input" placeholder="Enter passphrase" autocomplete="off" onkeydown="if(event.key==='Enter')unlock()"/>
+    <button onclick="unlock()" id="unlock-btn">Access Dashboard</button>
+    <p class="lock-hint">Default passphrase: <code>health2026</code></p>
+    <button onclick="resetSetup()" class="link-btn">Change Script URL</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MAIN APP
+══════════════════════════════════════════════════ -->
+<div id="app" class="app hidden">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar" id="sidebar" role="navigation">
+    <div class="nav-brand">
+      <span class="brand-icon">🏥</span>
+      <div>
+        <div class="brand-name">RK Health</div>
+        <div class="brand-sub">Patient Assistant</div>
+      </div>
+    </div>
+
+    <div class="nav-section-label">MAIN</div>
+    <ul class="nav-links" role="list">
+      <li><button class="nav-item active" id="nav-dashboard" onclick="showTab('dashboard',this)">
+        <span class="nav-icon">📊</span><span>Dashboard</span>
+      </button></li>
+      <li><button class="nav-item" id="nav-add-log" onclick="showTab('add-log',this)">
+        <span class="nav-icon">➕</span><span>Add Entry</span>
+      </button></li>
+      <li><button class="nav-item" id="nav-view-logs" onclick="showTab('view-logs',this)">
+        <span class="nav-icon">📋</span><span>View Logs</span>
+      </button></li>
+      <li><button class="nav-item" id="nav-prescriptions" onclick="showTab('prescriptions',this)">
+        <span class="nav-icon">💊</span><span>Prescriptions</span>
+      </button></li>
+      <li><button class="nav-item" id="nav-report" onclick="showTab('report',this)">
+        <span class="nav-icon">📄</span><span>Health Report</span>
+      </button></li>
+    </ul>
+
+    <div class="nav-section-label" style="margin-top:auto;padding-top:1rem">TOOLS</div>
+    <div class="nav-footer">
+      <button onclick="exportCSV()" class="nav-tool-btn">⬇ Export CSV</button>
+      <button onclick="refreshAll()" class="nav-tool-btn">↺ Refresh</button>
+      <button onclick="resetSetup()" class="nav-tool-btn">⚙ Change URL</button>
+      <button onclick="lockApp()" class="nav-tool-btn danger">🔒 Lock App</button>
+    </div>
+  </nav>
+
+  <!-- OVERLAY for mobile sidebar -->
+  <div id="sidebar-overlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content" role="main">
+
+    <!-- MOBILE TOPBAR -->
+    <header class="topbar">
+      <button class="menu-btn" onclick="toggleSidebar()" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+      <span class="topbar-title">🏥 RK Health</span>
+      <button class="topbar-refresh" onclick="refreshAll()" aria-label="Refresh">↺</button>
+    </header>
+
+    <!-- TOAST -->
+    <div id="toast" class="toast hidden" role="alert" aria-live="assertive"></div>
+
+    <!-- ── TAB: DASHBOARD ── -->
+    <section id="tab-dashboard" class="tab active">
+      <div class="page-header">
+        <div>
+          <h2>Health Dashboard</h2>
+          <p class="page-sub">Your health at a glance</p>
+        </div>
+        <button onclick="showTab('add-log', document.getElementById('nav-add-log'))" class="btn-primary btn-sm">+ Add Entry</button>
+      </div>
+
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card" onclick="filterAndGo('appointment')">
+          <div class="stat-icon">📅</div>
+          <div class="stat-num" id="stat-appt">—</div>
+          <div class="stat-label">Appointments</div>
+        </div>
+        <div class="stat-card" onclick="filterAndGo('medication')">
+          <div class="stat-icon">💊</div>
+          <div class="stat-num" id="stat-med">—</div>
+          <div class="stat-label">Medications</div>
+        </div>
+        <div class="stat-card success-card" onclick="filterAndGoStatus('completed')">
+          <div class="stat-icon">✅</div>
+          <div class="stat-num" id="stat-done">—</div>
+          <div class="stat-label">Completed</div>
+        </div>
+        <div class="stat-card warn-card" onclick="filterAndGoStatus('pending')">
+          <div class="stat-icon">⏳</div>
+          <div class="stat-num" id="stat-pending">—</div>
+          <div class="stat-label">Pending</div>
+        </div>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="compliance-bar-wrap">
+        <div class="compliance-label">
+          <span>Compliance Rate</span>
+          <span id="compliance-pct">—%</span>
+        </div>
+        <div class="compliance-bar"><div class="compliance-fill" id="compliance-fill" style="width:0%"></div></div>
+      </div>
+
+      <div class="two-col-grid">
+        <div>
+          <div class="section-header">
+            <h3>📅 Upcoming Appointments</h3>
+          </div>
+          <div id="upcoming-list" class="log-list">
+            <div class="skeleton-card"></div><div class="skeleton-card"></div>
+          </div>
+        </div>
+        <div>
+          <div class="section-header">
+            <h3>💊 Pending Medications</h3>
+          </div>
+          <div id="pending-meds-list" class="log-list">
+            <div class="skeleton-card"></div><div class="skeleton-card"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── TAB: ADD ENTRY ── -->
+    <section id="tab-add-log" class="tab hidden">
+      <div class="page-header">
+        <div>
+          <h2>Add New Entry</h2>
+          <p class="page-sub">Log an appointment or medication reminder</p>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <div class="type-toggle" role="group" aria-label="Entry type">
+          <button id="type-btn-appointment" class="type-btn active" onclick="setType('appointment')">📅 Appointment</button>
+          <button id="type-btn-medication"  class="type-btn"        onclick="setType('medication')">💊 Medication</button>
+        </div>
+        <input type="hidden" id="entry-type" value="appointment"/>
+
+        <div class="form-grid">
+          <div class="form-group full">
+            <label for="patient-name">Patient Name <span class="req">*</span></label>
+            <input type="text" id="patient-name" placeholder="Full name of patient" required/>
+          </div>
+
+          <div class="form-group">
+            <label for="entry-date">Date <span class="req">*</span></label>
+            <input type="date" id="entry-date" required/>
+          </div>
+          <div class="form-group">
+            <label for="entry-time">Time</label>
+            <input type="time" id="entry-time"/>
+          </div>
+
+          <div class="form-group full">
+            <label for="entry-title">Title / Purpose <span class="req">*</span></label>
+            <input type="text" id="entry-title" placeholder="e.g. Cardiology follow-up, Morning insulin"/>
+          </div>
+
+          <!-- Appointment fields -->
+          <div class="form-group" id="field-doctor">
+            <label for="doctor-name">Doctor Name</label>
+            <input type="text" id="doctor-name" placeholder="Dr. Name"/>
+          </div>
+          <div class="form-group" id="field-phone">
+            <label for="patient-phone">Phone (for SMS reminder)</label>
+            <input type="tel" id="patient-phone" placeholder="+91XXXXXXXXXX"/>
+          </div>
+
+          <!-- Medication fields -->
+          <div class="form-group hidden" id="field-dosage">
+            <label for="dosage">Dosage</label>
+            <input type="text" id="dosage" placeholder="e.g. 500mg, 2 tablets"/>
+          </div>
+
+          <div class="form-group full">
+            <label for="entry-notes">Notes / Instructions</label>
+            <textarea id="entry-notes" rows="3" placeholder="Additional instructions, reports to carry, diet notes..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="entry-status">Status</label>
+            <select id="entry-status">
+              <option value="pending">⏳ Pending</option>
+              <option value="completed">✅ Completed</option>
+              <option value="missed">❌ Missed</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button onclick="submitLog()" class="btn-primary" id="submit-btn">💾 Save Entry</button>
+          <button onclick="resetForm()" class="btn-ghost">Clear Form</button>
+        </div>
+
+        <!-- After-save actions -->
+        <div id="post-save-actions" class="post-save hidden">
+          <div class="post-save-title">✅ Entry saved! What next?</div>
+          <div class="post-save-btns">
+            <a id="cal-link" href="#" target="_blank" rel="noopener" class="btn-outline">📅 Add to Google Calendar</a>
+            <button id="sms-btn" onclick="sendSMSReminder()" class="btn-outline">📱 Send SMS Reminder</button>
+            <button id="summary-btn" onclick="generateAISummary()" class="btn-outline">🤖 Generate AI Summary</button>
+          </div>
+          <div id="ai-summary-box" class="ai-summary hidden"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── TAB: VIEW LOGS ── -->
+    <section id="tab-view-logs" class="tab hidden">
+      <div class="page-header">
+        <div>
+          <h2>All Health Logs</h2>
+          <p class="page-sub">Search, filter, and manage all records</p>
+        </div>
+        <button onclick="exportCSV()" class="btn-outline btn-sm">⬇ Export CSV</button>
+      </div>
+
+      <div class="filter-bar">
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="search" id="search-input" placeholder="Search by name, title, doctor..." oninput="filterLogs()" aria-label="Search logs"/>
+        </div>
+        <select id="filter-type" onchange="filterLogs()" aria-label="Filter by type">
+          <option value="">All Types</option>
+          <option value="appointment">📅 Appointments</option>
+          <option value="medication">💊 Medications</option>
+        </select>
+        <select id="filter-status" onchange="filterLogs()" aria-label="Filter by status">
+          <option value="">All Status</option>
+          <option value="pending">⏳ Pending</option>
+          <option value="completed">✅ Completed</option>
+          <option value="missed">❌ Missed</option>
+        </select>
+        <button onclick="clearFilters()" class="btn-ghost btn-sm">✕ Clear</button>
+      </div>
+
+      <div class="log-count-bar">
+        <span id="log-count">Loading...</span>
+        <div class="sort-wrap">
+          <label for="sort-by">Sort:</label>
+          <select id="sort-by" onchange="filterLogs()">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="date">By appointment date</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="all-logs-list" class="log-list" aria-live="polite">
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+      </div>
+    </section>
+
+    <!-- ── TAB: PRESCRIPTIONS ── -->
+    <section id="tab-prescriptions" class="tab hidden">
+      <div class="page-header">
+        <div>
+          <h2>Prescription Store</h2>
+          <p class="page-sub">All medication records in one place</p>
+        </div>
+      </div>
+      <div id="prescription-list" class="log-list">
+        <div class="skeleton-card"></div>
+      </div>
+    </section>
+
+    <!-- ── TAB: HEALTH REPORT ── -->
+    <section id="tab-report" class="tab hidden">
+      <div class="page-header">
+        <div>
+          <h2>Health Report</h2>
+          <p class="page-sub">Complete health record — print or share</p>
+        </div>
+        <button onclick="window.print()" class="btn-primary btn-sm">🖨 Print Report</button>
+      </div>
+
+      <div id="report-container" class="report-container">
+        <div class="report-header">
+          <div class="report-logo">🏥 RK Health</div>
+          <div class="report-meta">
+            <div>Patient Health Report</div>
+            <div id="report-date"></div>
+          </div>
+        </div>
+        <div id="report-stats-row" class="report-stats-row"></div>
+        <div id="report-appointments" class="report-section"></div>
+        <div id="report-medications" class="report-section"></div>
+        <div id="report-summaries"   class="report-section"></div>
+        <div class="report-footer">Generated by RK Health · Patient Appointment & Medication Reminder Assistant</div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODAL: LOG DETAIL / AI SUMMARY
+══════════════════════════════════════════════════ -->
+<div id="modal-overlay" class="modal-overlay hidden" onclick="closeModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="modal-title">Log Detail</h3>
+      <button onclick="closeModal()" class="modal-close" aria-label="Close">✕</button>
+    </div>
+    <div id="modal-body" class="modal-body"></div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════
+//  CONFIG & STATE
+// ════════════════════════════════════════════════════════
+const PASSPHRASE = "health2026";
+let SCRIPT_URL   = "";
+let allLogs      = [];
+let lastSavedEntry = null;
+
+// ════════════════════════════════════════════════════════
+//  INIT — decide which screen to show
+// ════════════════════════════════════════════════════════
+(function init() {
+  SCRIPT_URL = localStorage.getItem("rk_script_url") || "";
+  if (!SCRIPT_URL) {
+    show("setup-screen");
+  } else {
+    show("lock-screen");
+  }
+  document.getElementById("report-date").textContent =
+    new Date().toLocaleDateString("en-IN", { weekday:"long", year:"numeric", month:"long", day:"numeric" });
+})();
+
+function show(id) {
+  ["setup-screen","lock-screen","app"].forEach(s =>
+    document.getElementById(s).classList.toggle("hidden", s !== id)
+  );
+}
+
+// ════════════════════════════════════════════════════════
+//  SETUP
+// ════════════════════════════════════════════════════════
+function saveSetup() {
+  const url = document.getElementById("setup-url").value.trim();
+  if (!url.startsWith("https://script.google.com/macros/s/")) {
+    document.getElementById("setup-error").classList.remove("hidden");
+    return;
+  }
+  document.getElementById("setup-error").classList.add("hidden");
+  document.getElementById("setup-btn").textContent = "Testing connection...";
+  document.getElementById("setup-btn").disabled = true;
+
+  fetch(url + "?action=getStats")
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === "success" || data.stats) {
+        localStorage.setItem("rk_script_url", url);
+        SCRIPT_URL = url;
+        show("lock-screen");
+        showToast("✅ Connected successfully!", "success");
+      } else {
+        throw new Error("Unexpected response");
+      }
+    })
+    .catch(() => {
+      // Even if test fails, save and proceed (CORS on test may block)
+      localStorage.setItem("rk_script_url", url);
+      SCRIPT_URL = url;
+      show("lock-screen");
+      showToast("⚠️ URL saved. If errors persist, redeploy your Apps Script.", "warn");
+    })
+    .finally(() => {
+      document.getElementById("setup-btn").textContent = "Connect & Continue →";
+      document.getElementById("setup-btn").disabled = false;
+    });
+}
+
+function resetSetup() {
+  localStorage.removeItem("rk_script_url");
+  SCRIPT_URL = "";
+  show("setup-screen");
+  document.getElementById("setup-url").value = "";
+}
+
+// ════════════════════════════════════════════════════════
+//  LOCK / UNLOCK
+// ════════════════════════════════════════════════════════
+function unlock() {
+  const val = document.getElementById("pin-input").value.trim();
+  if (val === PASSPHRASE) {
+    show("app");
+    loadDashboard();
+    loadAllLogs();
+  } else {
+    const inp = document.getElementById("pin-input");
+    inp.classList.add("shake");
+    setTimeout(() => inp.classList.remove("shake"), 400);
+    showToast("❌ Incorrect passphrase", "danger");
+  }
+}
+
+function lockApp() {
+  show("lock-screen");
+  document.getElementById("pin-input").value = "";
+  allLogs = [];
+}
+
+// ════════════════════════════════════════════════════════
+//  TAB NAVIGATION
+// ════════════════════════════════════════════════════════
+function showTab(name, btn) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.add("hidden"));
+  document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+  const tab = document.getElementById("tab-" + name);
+  if (tab) tab.classList.remove("hidden");
+  if (btn) btn.classList.add("active");
+  else {
+    const navBtn = document.getElementById("nav-" + name);
+    if (navBtn) navBtn.classList.add("active");
+  }
+  closeSidebar();
+  if (name === "view-logs")     { renderAllLogs(allLogs); }
+  if (name === "prescriptions") { renderPrescriptions(); }
+  if (name === "report")        { buildReport(); }
+}
+
+// ════════════════════════════════════════════════════════
+//  SIDEBAR
+// ════════════════════════════════════════════════════════
+function toggleSidebar() {
+  document.getElementById("sidebar").classList.toggle("open");
+  document.getElementById("sidebar-overlay").classList.toggle("visible");
+}
+function closeSidebar() {
+  document.getElementById("sidebar").classList.remove("open");
+  document.getElementById("sidebar-overlay").classList.remove("visible");
+}
+
+// ════════════════════════════════════════════════════════
+//  FORM — TYPE TOGGLE
+// ════════════════════════════════════════════════════════
+function setType(type) {
+  document.getElementById("entry-type").value = type;
+  document.getElementById("type-btn-appointment").classList.toggle("active", type === "appointment");
+  document.getElementById("type-btn-medication").classList.toggle("active",  type === "medication");
+  document.getElementById("field-doctor").classList.toggle("hidden",   type !== "appointment");
+  document.getElementById("field-phone").classList.toggle("hidden",    type !== "appointment");
+  document.getElementById("field-dosage").classList.toggle("hidden",   type !== "medication");
+  document.getElementById("post-save-actions").classList.add("hidden");
+}
+
+function resetForm() {
+  ["patient-name","entry-date","entry-time","entry-title",
+   "doctor-name","patient-phone","dosage","entry-notes"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
+  document.getElementById("entry-status").value = "pending";
+  setType("appointment");
+  document.getElementById("post-save-actions").classList.add("hidden");
+  document.getElementById("ai-summary-box").classList.add("hidden");
+}
+
+// ════════════════════════════════════════════════════════
+//  SUBMIT LOG
+// ════════════════════════════════════════════════════════
+async function submitLog() {
+  const btn  = document.getElementById("submit-btn");
+  const type = document.getElementById("entry-type").value;
+  const patientName = document.getElementById("patient-name").value.trim();
+  const date  = document.getElementById("entry-date").value;
+  const title = document.getElementById("entry-title").value.trim();
+
+  if (!patientName) { showToast("⚠️ Patient name is required", "warn"); return; }
+  if (!date)        { showToast("⚠️ Date is required", "warn"); return; }
+  if (!title)       { showToast("⚠️ Title / Purpose is required", "warn"); return; }
+
+  btn.textContent = "Saving...";
+  btn.disabled = true;
+
+  const entry = {
+    type, patientName, date,
+    time:       document.getElementById("entry-time").value,
+    title,
+    notes:      document.getElementById("entry-notes").value.trim(),
+    status:     document.getElementById("entry-status").value,
+    doctorName: document.getElementById("doctor-name").value.trim(),
+    dosage:     document.getElementById("dosage").value.trim(),
+    phone:      document.getElementById("patient-phone").value.trim()
+  };
+
+  try {
+    const result = await apiPost({ action: "addLog", ...entry });
+    if (result.status === "success") {
+      const saved = { id: result.id, timestamp: result.timestamp, ...entry };
+      allLogs.unshift(saved);
+      lastSavedEntry = saved;
+      showToast("✅ Entry saved to Google Sheets!", "success");
+
+      // Show post-save actions
+      if (type === "appointment") {
+        document.getElementById("cal-link").href = makeGCalLink(entry);
+        document.getElementById("sms-btn").style.display = entry.phone ? "inline-block" : "none";
+        document.getElementById("summary-btn").style.display = "inline-block";
+      } else {
+        document.getElementById("cal-link").style.display = "none";
+        document.getElementById("sms-btn").style.display = "none";
+        document.getElementById("summary-btn").style.display = "none";
+      }
+      document.getElementById("ai-summary-box").classList.add("hidden");
+      document.getElementById("post-save-actions").classList.remove("hidden");
+
+      refreshStats();
+      renderDashboardLists();
+    } else {
+      showToast("❌ Error: " + (result.message || "Unknown error"), "danger");
+    }
+  } catch(e) {
+    showToast("❌ Network error. Check your Script URL in sidebar → Change URL.", "danger");
+    console.error(e);
+  }
+  btn.textContent = "💾 Save Entry";
+  btn.disabled = false;
+}
+
+// ════════════════════════════════════════════════════════
+//  PHASE 2 — GOOGLE CALENDAR LINK
+// ════════════════════════════════════════════════════════
+function makeGCalLink({ title, date, time, notes, doctorName }) {
+  if (!date) return "#";
+  const dt  = new Date(`${date}T${time || "09:00"}:00`);
+  const end = new Date(dt.getTime() + 3600000);
+  const fmt = d => d.toISOString().replace(/[-:]/g,"").slice(0,15) + "Z";
+  const desc = `Doctor: ${doctorName || "N/A"}\nNotes: ${notes || "—"}`;
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE`
+    + `&text=${encodeURIComponent(title || "Appointment")}`
+    + `&dates=${fmt(dt)}/${fmt(end)}`
+    + `&details=${encodeURIComponent(desc)}`;
+}
+
+// ════════════════════════════════════════════════════════
+//  PHASE 3 — AI SUMMARY
+// ════════════════════════════════════════════════════════
+async function generateAISummary() {
+  if (!lastSavedEntry) return;
+  const btn = document.getElementById("summary-btn");
+  const box = document.getElementById("ai-summary-box");
+  btn.textContent = "🤖 Generating...";
+  btn.disabled = true;
+  box.classList.remove("hidden");
+  box.innerHTML = '<div class="ai-loading">Generating AI visit summary via OpenAI...</div>';
+
+  try {
+    const result = await apiPost({ action: "generateSummary", ...lastSavedEntry });
+    if (result.status === "success") {
+      box.innerHTML = `<div class="ai-summary-header">🤖 AI Visit Summary</div><div class="ai-summary-text">${escHtml(result.summary).replace(/\n/g,"<br/>")}</div>`;
+      showToast("✅ AI summary generated and saved!", "success");
+    } else {
+      box.innerHTML = `<div class="ai-summary-error">❌ ${escHtml(result.message)}</div>`;
+    }
+  } catch(e) {
+    box.innerHTML = '<div class="ai-summary-error">❌ Network error during AI generation.</div>';
+  }
+  btn.textContent = "🤖 Generate AI Summary";
+  btn.disabled = false;
+}
+
+// ════════════════════════════════════════════════════════
+//  PHASE 3 — SMS REMINDER
+// ════════════════════════════════════════════════════════
+async function sendSMSReminder() {
+  if (!lastSavedEntry) return;
+  const btn = document.getElementById("sms-btn");
+  btn.textContent = "📱 Sending...";
+  btn.disabled = true;
+  try {
+    const result = await apiPost({ action: "sendSMS", ...lastSavedEntry });
+    if (result.status === "success") {
+      showToast("✅ SMS reminder sent!", "success");
+      btn.textContent = "📱 SMS Sent ✓";
+    } else {
+      showToast("❌ SMS: " + result.message, "danger");
+      btn.textContent = "📱 Send SMS Reminder";
+      btn.disabled = false;
+    }
+  } catch(e) {
+    showToast("❌ SMS network error", "danger");
+    btn.textContent = "📱 Send SMS Reminder";
+    btn.disabled = false;
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  LOAD DASHBOARD
+// ════════════════════════════════════════════════════════
+async function loadDashboard() {
+  try {
+    const stats = await apiGet("getStats");
+    const s = stats.stats || stats;
+    document.getElementById("stat-appt").textContent    = s.appointments ?? "0";
+    document.getElementById("stat-med").textContent     = s.medications  ?? "0";
+    document.getElementById("stat-done").textContent    = s.completed    ?? "0";
+    document.getElementById("stat-pending").textContent = s.pending      ?? "0";
+
+    const total = (s.completed||0) + (s.pending||0) + (s.missed||0);
+    const pct   = total > 0 ? Math.round((s.completed / total) * 100) : 0;
+    document.getElementById("compliance-pct").textContent  = pct + "%";
+    document.getElementById("compliance-fill").style.width = pct + "%";
+    document.getElementById("compliance-fill").style.background =
+      pct >= 80 ? "var(--accent)" : pct >= 50 ? "var(--warn)" : "var(--danger)";
+  } catch(e) { console.warn("Stats load failed", e); }
+}
+
+async function refreshAll() {
+  showToast("↺ Refreshing...", "info");
+  await loadAllLogs();
+  await loadDashboard();
+  showToast("✅ Data refreshed!", "success");
+}
+
+async function refreshStats() {
+  await loadDashboard();
+}
+
+// ════════════════════════════════════════════════════════
+//  LOAD ALL LOGS
+// ════════════════════════════════════════════════════════
+async function loadAllLogs() {
+  try {
+    const data = await apiGet("getLogs");
+    allLogs = data.data || data || [];
+    renderDashboardLists();
+    document.getElementById("log-count").textContent =
+      allLogs.length + " total records";
+  } catch(e) {
+    showToast("❌ Could not load logs. Check your Script URL.", "danger");
+    document.getElementById("log-count").textContent = "Error loading logs";
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  RENDER DASHBOARD LISTS
+// ════════════════════════════════════════════════════════
+function renderDashboardLists() {
+  const today = new Date().toISOString().slice(0,10);
+  const upcoming  = allLogs.filter(l => l.type==="appointment" && l.date>=today && l.status==="pending").slice(0,5);
+  const pendingM  = allLogs.filter(l => l.type==="medication"  && l.status==="pending").slice(0,5);
+  renderList("upcoming-list",   upcoming,  "No upcoming appointments. <a href='#' onclick=\"showTab('add-log',null)\">Add one →</a>");
+  renderList("pending-meds-list", pendingM, "No pending medications.");
+}
+
+// ════════════════════════════════════════════════════════
+//  FILTER + RENDER ALL LOGS
+// ════════════════════════════════════════════════════════
+function filterLogs() {
+  const q      = document.getElementById("search-input").value.toLowerCase();
+  const type   = document.getElementById("filter-type").value;
+  const status = document.getElementById("filter-status").value;
+  const sort   = document.getElementById("sort-by").value;
+
+  let filtered = allLogs.filter(l => {
+    const matchQ = !q || [l.patientName,l.title,l.doctorName,l.notes,l.dosage].join(" ").toLowerCase().includes(q);
+    const matchT = !type   || l.type   === type;
+    const matchS = !status || l.status === status;
+    return matchQ && matchT && matchS;
+  });
+
+  if (sort === "oldest") filtered.sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+  else if (sort === "date") filtered.sort((a,b) => (a.date||"") < (b.date||"") ? -1 : 1);
+  else filtered.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  document.getElementById("log-count").textContent =
+    `${filtered.length} of ${allLogs.length} records`;
+  renderAllLogs(filtered);
+}
+
+function clearFilters() {
+  document.getElementById("search-input").value  = "";
+  document.getElementById("filter-type").value   = "";
+  document.getElementById("filter-status").value = "";
+  document.getElementById("sort-by").value       = "newest";
+  filterLogs();
+}
+
+function filterAndGo(type) {
+  showTab("view-logs", document.getElementById("nav-view-logs"));
+  document.getElementById("filter-type").value = type;
+  filterLogs();
+}
+
+function filterAndGoStatus(status) {
+  showTab("view-logs", document.getElementById("nav-view-logs"));
+  document.getElementById("filter-status").value = status;
+  filterLogs();
+}
+
+function renderAllLogs(logs) {
+  renderList("all-logs-list", logs, "No records match your filters.");
+}
+
+function renderPrescriptions() {
+  const meds = allLogs.filter(l => l.type === "medication");
+  renderList("prescription-list", meds, "No medication records yet. Add one from 'Add Entry'.");
+}
+
+// ════════════════════════════════════════════════════════
+//  GENERIC RENDER
+// ════════════════════════════════════════════════════════
+function renderList(containerId, items, emptyMsg) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!items || !items.length) {
+    el.innerHTML = `<div class="empty-state">${emptyMsg}</div>`;
+    return;
+  }
+  el.innerHTML = items.map(l => logCard(l)).join("");
+}
+
+function logCard(log) {
+  const sc = { completed:"status-done", pending:"status-pending", missed:"status-missed" }[log.status] || "status-pending";
+  const sl = { completed:"✅ Completed", pending:"⏳ Pending", missed:"❌ Missed" }[log.status] || log.status;
+  const isAppt = log.type === "appointment";
+  const calBtn = isAppt && log.date
+    ? `<a href="${makeGCalLink(log)}" target="_blank" rel="noopener" class="btn-xs outline">📅 Calendar</a>`
+    : "";
+  const aiBtn = log.summary
+    ? `<button onclick="showSummary('${escAttr(log.id)}')" class="btn-xs info">🤖 View Summary</button>`
+    : (isAppt ? `<button onclick="generateSummaryForLog('${escAttr(log.id)}')" class="btn-xs outline">🤖 AI Summary</button>` : "");
+  const smsBtn = isAppt && log.phone && log.reminderSent !== "yes"
+    ? `<button onclick="sendSMSForLog('${escAttr(log.id)}')" class="btn-xs outline">📱 SMS</button>`
+    : (log.reminderSent === "yes" ? `<span class="sent-badge">📱 Reminded</span>` : "");
+
+  return `
+  <div class="log-card" id="card-${log.id}">
+    <div class="log-header">
+      <span class="log-type-badge ${isAppt ? "appt-badge" : "med-badge"}">${isAppt ? "📅 Appointment" : "💊 Medication"}</span>
+      <span class="status-badge ${sc}">${sl}</span>
+    </div>
+    <div class="log-title">${escHtml(log.title||"—")}</div>
+    <div class="log-meta">
+      <span>👤 ${escHtml(log.patientName||"—")}</span>
+      ${log.date ? `<span>📅 ${log.date}${log.time ? " · "+log.time : ""}</span>` : ""}
+      ${log.doctorName ? `<span>🩺 ${escHtml(log.doctorName)}</span>` : ""}
+      ${log.dosage     ? `<span>💊 ${escHtml(log.dosage)}</span>` : ""}
+      ${log.phone      ? `<span>📱 ${escHtml(log.phone)}</span>` : ""}
+    </div>
+    ${log.notes ? `<div class="log-notes">${escHtml(log.notes)}</div>` : ""}
+    <div class="log-actions">
+      ${calBtn}${aiBtn}${smsBtn}
+      <button onclick="markStatus('${escAttr(log.id)}','completed')" class="btn-xs success">✅ Done</button>
+      <button onclick="markStatus('${escAttr(log.id)}','missed')"    class="btn-xs danger">❌ Missed</button>
+      <button onclick="removeLog('${escAttr(log.id)}')"              class="btn-xs warn">🗑 Delete</button>
+    </div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════════════════
+//  STATUS UPDATE & DELETE
+// ════════════════════════════════════════════════════════
+async function markStatus(id, status) {
+  try {
+    await apiPost({ action: "updateLog", id, status });
+    const idx = allLogs.findIndex(l => l.id === id);
+    if (idx > -1) allLogs[idx].status = status;
+    showToast(`✅ Marked as ${status}`, "success");
+    refreshStats();
+    renderDashboardLists();
+    filterLogs();
+  } catch(e) { showToast("❌ Update failed", "danger"); }
+}
+
+async function removeLog(id) {
+  if (!confirm("Delete this entry? This cannot be undone.")) return;
+  try {
+    await apiPost({ action: "deleteLog", id });
+    allLogs = allLogs.filter(l => l.id !== id);
+    showToast("🗑 Entry deleted", "success");
+    refreshStats();
+    renderDashboardLists();
+    filterLogs();
+  } catch(e) { showToast("❌ Delete failed", "danger"); }
+}
+
+// ════════════════════════════════════════════════════════
+//  AI SUMMARY FOR EXISTING LOG
+// ════════════════════════════════════════════════════════
+async function generateSummaryForLog(id) {
+  const log = allLogs.find(l => l.id === id);
+  if (!log) return;
+  const btn = document.querySelector(`#card-${id} .btn-xs.outline`);
+  if (btn) { btn.textContent = "🤖 Generating..."; btn.disabled = true; }
+
+  try {
+    const result = await apiPost({ action: "generateSummary", ...log });
+    if (result.status === "success") {
+      log.summary = result.summary;
+      showSummary(id);
+      filterLogs();
+      renderDashboardLists();
+      showToast("✅ AI summary generated!", "success");
+    } else {
+      showToast("❌ " + result.message, "danger");
+      if (btn) { btn.textContent = "🤖 AI Summary"; btn.disabled = false; }
+    }
+  } catch(e) {
+    showToast("❌ Network error", "danger");
+    if (btn) { btn.textContent = "🤖 AI Summary"; btn.disabled = false; }
+  }
+}
+
+function showSummary(id) {
+  const log = allLogs.find(l => l.id === id);
+  if (!log || !log.summary) return;
+  document.getElementById("modal-title").textContent = "🤖 AI Visit Summary";
+  document.getElementById("modal-body").innerHTML =
+    `<div class="modal-meta"><strong>${escHtml(log.patientName)}</strong> · ${log.date} · ${escHtml(log.doctorName||"")}</div>
+     <div class="modal-summary-text">${escHtml(log.summary).replace(/\n/g,"<br/>")}</div>`;
+  document.getElementById("modal-overlay").classList.remove("hidden");
+}
+
+function closeModal() {
+  document.getElementById("modal-overlay").classList.add("hidden");
+}
+
+// ════════════════════════════════════════════════════════
+//  SMS FOR EXISTING LOG
+// ════════════════════════════════════════════════════════
+async function sendSMSForLog(id) {
+  const log = allLogs.find(l => l.id === id);
+  if (!log) return;
+  const result = await apiPost({ action: "sendSMS", ...log });
+  if (result.status === "success") {
+    log.reminderSent = "yes";
+    showToast("✅ SMS sent!", "success");
+    filterLogs();
+  } else {
+    showToast("❌ SMS: " + result.message, "danger");
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  HEALTH REPORT (Phase 2)
+// ════════════════════════════════════════════════════════
+function buildReport() {
+  const appts = allLogs.filter(l => l.type === "appointment");
+  const meds  = allLogs.filter(l => l.type === "medication");
+  const withSummary = allLogs.filter(l => l.summary);
+  const done  = allLogs.filter(l => l.status === "completed").length;
+  const total = allLogs.length;
+  const pct   = total > 0 ? Math.round((done/total)*100) : 0;
+
+  document.getElementById("report-stats-row").innerHTML = `
+    <div class="report-stat"><span class="rsn">${appts.length}</span><span class="rsl">Appointments</span></div>
+    <div class="report-stat"><span class="rsn">${meds.length}</span><span class="rsl">Medications</span></div>
+    <div class="report-stat"><span class="rsn">${done}</span><span class="rsl">Completed</span></div>
+    <div class="report-stat"><span class="rsn">${pct}%</span><span class="rsl">Compliance</span></div>
+  `;
+
+  document.getElementById("report-appointments").innerHTML = appts.length ? `
+    <h3 class="report-section-title">📅 Appointments (${appts.length})</h3>
+    <table class="report-table">
+      <thead><tr><th>Date</th><th>Time</th><th>Patient</th><th>Purpose</th><th>Doctor</th><th>Status</th></tr></thead>
+      <tbody>${appts.map(l=>`<tr><td>${l.date||"—"}</td><td>${l.time||"—"}</td><td>${escHtml(l.patientName)}</td><td>${escHtml(l.title)}</td><td>${escHtml(l.doctorName||"—")}</td><td>${l.status}</td></tr>`).join("")}</tbody>
+    </table>` : "";
+
+  document.getElementById("report-medications").innerHTML = meds.length ? `
+    <h3 class="report-section-title">💊 Medications (${meds.length})</h3>
+    <table class="report-table">
+      <thead><tr><th>Date</th><th>Patient</th><th>Medication</th><th>Dosage</th><th>Notes</th><th>Status</th></tr></thead>
+      <tbody>${meds.map(l=>`<tr><td>${l.date||"—"}</td><td>${escHtml(l.patientName)}</td><td>${escHtml(l.title)}</td><td>${escHtml(l.dosage||"—")}</td><td>${escHtml(l.notes||"—")}</td><td>${l.status}</td></tr>`).join("")}</tbody>
+    </table>` : "";
+
+  document.getElementById("report-summaries").innerHTML = withSummary.length ? `
+    <h3 class="report-section-title">🤖 AI Visit Summaries (${withSummary.length})</h3>
+    ${withSummary.map(l=>`
+      <div class="report-summary-card">
+        <div class="report-summary-meta"><strong>${escHtml(l.patientName)}</strong> · ${l.date} · Dr. ${escHtml(l.doctorName||"N/A")}</div>
+        <div class="report-summary-text">${escHtml(l.summary).replace(/\n/g,"<br/>")}</div>
+      </div>`).join("")}` : "";
+}
+
+// ════════════════════════════════════════════════════════
+//  CSV EXPORT
+// ════════════════════════════════════════════════════════
+function exportCSV() {
+  if (!allLogs.length) { showToast("No logs to export", "warn"); return; }
+  const headers = ["id","timestamp","type","patientName","date","time","title","notes","status","doctorName","dosage","phone","summary","reminderSent"];
+  const rows = allLogs.map(l => headers.map(h => `"${(l[h]||"").replace(/"/g,'""')}"`).join(","));
+  const csv  = [headers.join(","), ...rows].join("\n");
+  const a = Object.assign(document.createElement("a"), {
+    href: URL.createObjectURL(new Blob([csv],{type:"text/csv"})),
+    download: `rk-health-logs-${new Date().toISOString().slice(0,10)}.csv`
+  });
+  a.click();
+  showToast("⬇ CSV exported!", "success");
+}
+
+// ════════════════════════════════════════════════════════
+//  API HELPERS
+// ════════════════════════════════════════════════════════
+async function apiGet(action, params = {}) {
+  if (!SCRIPT_URL) throw new Error("No Script URL configured");
+  const url = new URL(SCRIPT_URL);
+  url.searchParams.set("action", action);
+  Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
+  const res  = await fetch(url.toString());
+  return res.json();
+}
+
+async function apiPost(body) {
+  if (!SCRIPT_URL) throw new Error("No Script URL configured");
+  const res = await fetch(SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    mode: "cors"
+  });
+  return res.json();
+}
+
+// ════════════════════════════════════════════════════════
+//  TOAST
+// ════════════════════════════════════════════════════════
+let toastTimer;
+function showToast(msg, type = "success") {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = `toast toast-${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.add("hidden"), 3800);
+}
+
+// ════════════════════════════════════════════════════════
+//  UTILS
+// ════════════════════════════════════════════════════════
+function escHtml(str) {
+  return String(str||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function escAttr(str) {
+  return String(str||"").replace(/'/g,"\\'").replace(/</g,"&lt;");
+}
+
+// Keyboard shortcut: Esc closes modal
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeModal();
+});
+</script>
+</body>
+</html>
