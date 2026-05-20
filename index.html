@@ -333,7 +333,7 @@
     // ════════════════════════════════════════════════════════
     //  ▼▼▼  PASTE YOUR APPS SCRIPT URL HERE  ▼▼▼
     // ════════════════════════════════════════════════════════
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbydne43ITxoa1gVJmo1JZGOOXk0uNGNxPCStO3m1xlP_R3QVXPbdURZXC1k9IDj2a74cw/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyVUKlVbFrKxe8hkGha-q_Ba6caDE1uxb_uRBd6tXW-RwhJqfmeJPc6srSQ8Z_us_KuBw/exec";
     //  ▲▲▲  URL is hardcoded — no setup wizard needed  ▲▲▲
 
     const PASSPHRASE = "health2026";
@@ -501,19 +501,52 @@
       btn.disabled = false;
     }
 
-    // ════════════════════════════════════════════════════════
-    //  GOOGLE CALENDAR LINK
-    // ════════════════════════════════════════════════════════
-    function makeGCalLink({ title, date, time, notes, doctorName }) {
-      if (!date) return "#";
-      const dt = new Date(`${date}T${time || "09:00"}:00`);
-      const end = new Date(dt.getTime() + 3600000);
-      const fmt = d => d.toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z";
-      return `https://calendar.google.com/calendar/render?action=TEMPLATE`
-        + `&text=${encodeURIComponent(title || "Appointment")}`
-        + `&dates=${fmt(dt)}/${fmt(end)}`
-        + `&details=${encodeURIComponent("Doctor: " + (doctorName || "N/A") + "\n" + (notes || ""))}`;
+// ════════════════════════════════════════════════════════
+//  GOOGLE CALENDAR LINK  (FIXED)
+// ════════════════════════════════════════════════════════
+function makeGCalLink(log) {
+
+  try {
+
+    if (!log || !log.date) return "#";
+
+    let safeTime = "09:00";
+
+    if (
+      log.time &&
+      /^\d{2}:\d{2}$/.test(log.time)
+    ) {
+      safeTime = log.time;
     }
+
+    const start = new Date(`${log.date}T${safeTime}:00`);
+
+    if (isNaN(start.getTime())) {
+      console.error("Invalid calendar date:", log);
+      return "#";
+    }
+
+    const end = new Date(start.getTime() + 3600000);
+
+    const fmt = d =>
+      d.toISOString()
+        .replace(/[-:]/g, "")
+        .replace(/\.\d{3}/, "");
+
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE`
+      + `&text=${encodeURIComponent(log.title || "Appointment")}`
+      + `&dates=${fmt(start)}/${fmt(end)}`
+      + `&details=${encodeURIComponent(
+        "Doctor: " + (log.doctorName || "N/A") + "\n" + (log.notes || "")
+      )}`;
+
+  } catch (err) {
+
+    console.error("Calendar link error:", err);
+
+    return "#";
+  }
+}
 
     // ════════════════════════════════════════════════════════
     //  AI SUMMARY  (via GET)
@@ -596,32 +629,103 @@
 
     async function refreshStats() { await loadDashboard(); }
 
-    // ════════════════════════════════════════════════════════
-    //  LOAD ALL LOGS
-    // ════════════════════════════════════════════════════════
-    async function loadAllLogs() {
-      try {
-        const res = await api({ action: "getLogs" });
-        allLogs = res.data || [];
-        renderDashboardLists();
-        document.getElementById("log-count").textContent = allLogs.length + " total records";
-      } catch (e) {
-        showToast("❌ Could not load logs. Check SCRIPT_URL in index.html.", "danger");
-        document.getElementById("log-count").textContent = "Error loading logs";
-        console.error(e);
-      }
+// ════════════════════════════════════════════════════════
+//  LOAD ALL LOGS (FIXED)
+// ════════════════════════════════════════════════════════
+async function loadAllLogs() {
+
+  try {
+
+    const res = await api({ action: "getLogs" });
+
+    console.log("Backend Response:", res);
+
+    if (!res || !Array.isArray(res.data)) {
+      throw new Error("Invalid backend response");
     }
 
-    // ════════════════════════════════════════════════════════
-    //  RENDER DASHBOARD LISTS
-    // ════════════════════════════════════════════════════════
-    function renderDashboardLists() {
-      const today = new Date().toISOString().slice(0, 10);
-      const upcoming = allLogs.filter(l => l.type === "appointment" && l.date >= today && l.status === "pending").slice(0, 5);
-      const pendingM = allLogs.filter(l => l.type === "medication" && l.status === "pending").slice(0, 5);
-      renderList("upcoming-list", upcoming, "No upcoming appointments. <a href='#' onclick=\"showTab('add-log',null)\">Add one →</a>");
-      renderList("pending-meds-list", pendingM, "No pending medications.");
-    }
+    allLogs = res.data.map(log => ({
+
+      ...log,
+
+      date: log.date || "",
+
+      time: log.time || "",
+
+      patientName: log.patientName || "",
+
+      title: log.title || "",
+
+      notes: log.notes || "",
+
+      doctorName: log.doctorName || "",
+
+      dosage: log.dosage || "",
+
+      phone: log.phone || "",
+
+      status: log.status || "pending"
+
+    }));
+
+    renderDashboardLists();
+
+    renderAllLogs(allLogs);
+
+    document.getElementById("log-count").textContent =
+      `${allLogs.length} total records`;
+
+  } catch (e) {
+
+    console.error("Load logs error:", e);
+
+    showToast(
+      "❌ Could not load logs. Backend or date parsing issue.",
+      "danger"
+    );
+
+    document.getElementById("log-count").textContent =
+      "Error loading logs";
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  RENDER DASHBOARD LISTS (FIXED)
+// ════════════════════════════════════════════════════════
+function renderDashboardLists() {
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const upcoming = allLogs
+    .filter(l =>
+      l &&
+      l.type === "appointment" &&
+      l.date &&
+      l.date >= today &&
+      l.status === "pending"
+    )
+    .slice(0, 5);
+
+  const pendingM = allLogs
+    .filter(l =>
+      l &&
+      l.type === "medication" &&
+      l.status === "pending"
+    )
+    .slice(0, 5);
+
+  renderList(
+    "upcoming-list",
+    upcoming,
+    "No upcoming appointments. <a href='#' onclick=\"showTab('add-log',null)\">Add one →</a>"
+  );
+
+  renderList(
+    "pending-meds-list",
+    pendingM,
+    "No pending medications."
+  );
+}
 
     // ════════════════════════════════════════════════════════
     //  FILTER LOGS
@@ -677,32 +781,76 @@
       el.innerHTML = items.map(l => logCard(l)).join("");
     }
 
-    // ════════════════════════════════════════════════════════
-    //  FORMAT DATE — fixes the "Mon May 18 2026 GMT+0530" bug
-    //  Sheets stores YYYY-MM-DD; display as DD-MM-YYYY
-    // ════════════════════════════════════════════════════════
-    function fmtDate(d) {
-      if (!d) return "—";
-      // If it already looks like YYYY-MM-DD just reformat
-      const m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (m) return `${m[3]}-${m[2]}-${m[1]}`;
-      // Fallback: parse and format
-      const dt = new Date(d);
-      if (isNaN(dt)) return d;
-      return dt.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
+// ════════════════════════════════════════════════════════
+//  FORMAT DATE (FIXED)
+// ════════════════════════════════════════════════════════
+function fmtDate(d) {
+
+  if (!d) return "—";
+
+  try {
+
+    const str = String(d).trim();
+
+    const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+    if (match) {
+
+      return `${match[3]}-${match[2]}-${match[1]}`;
     }
 
-    function fmtTime(t) {
-      if (!t) return "";
-      // HH:MM from input[type=time]
-      const m = String(t).match(/^(\d{2}):(\d{2})/);
-      if (m) {
-        const h = parseInt(m[1]), mn = m[2];
-        return `${h > 12 ? h - 12 : h || 12}:${mn} ${h >= 12 ? "PM" : "AM"}`;
+    const dt = new Date(str);
+
+    if (isNaN(dt.getTime())) {
+
+      return "—";
+    }
+
+    return dt.toLocaleDateString(
+      "en-IN",
+      {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric"
       }
-      return t;
+    );
+
+  } catch (err) {
+
+    console.error("Date format error:", err);
+
+    return "—";
+  }
+}
+    // ════════════════════════════════════════════════════════
+//  FORMAT TIME (FIXED)
+// ════════════════════════════════════════════════════════
+function fmtTime(t) {
+
+  if (!t) return "";
+
+  try {
+
+    const clean = String(t).trim();
+
+    if (/^\d{2}:\d{2}$/.test(clean)) {
+
+      const [hh, mm] = clean.split(":");
+
+      const h = parseInt(hh);
+
+      return `${h > 12 ? h - 12 : h || 12}:${mm} ${h >= 12 ? "PM" : "AM"}`;
     }
 
+    return "";
+
+  } catch (err) {
+
+    console.error("Time format error:", err);
+
+    return "";
+  }
+}
     // ════════════════════════════════════════════════════════
     //  LOG CARD
     // ════════════════════════════════════════════════════════
