@@ -194,7 +194,7 @@
             </div>
             <div class="form-group" id="field-phone">
               <label for="patient-phone">Phone (for SMS reminder)</label>
-              <input type="tel" id="patient-phone" placeholder="+91XXXXXXXXXX" />
+              <input type="tel" id="patient-phone" placeholder="+91XXXXXXXXXX" pattern="^\+[1-9]\d{10,14}$" />
             </div>
             <div class="form-group hidden" id="field-dosage">
               <label for="dosage">Dosage</label>
@@ -333,7 +333,7 @@
     // ════════════════════════════════════════════════════════
     //  ▼▼▼  PASTE YOUR APPS SCRIPT URL HERE  ▼▼▼
     // ════════════════════════════════════════════════════════
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbydne43ITxoa1gVJmo1JZGOOXk0uNGNxPCStO3m1xlP_R3QVXPbdURZXC1k9IDj2a74cw/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyVUKlVbFrKxe8hkGha-q_Ba6caDE1uxb_uRBd6tXW-RwhJqfmeJPc6srSQ8Z_us_KuBw/exec";
     //  ▲▲▲  URL is hardcoded — no setup wizard needed  ▲▲▲
 
     const PASSPHRASE = "health2026";
@@ -450,7 +450,17 @@
       if (!patientName) { showToast("⚠️ Patient name is required", "warn"); return; }
       if (!date) { showToast("⚠️ Date is required", "warn"); return; }
       if (!title) { showToast("⚠️ Title / Purpose is required", "warn"); return; }
+      const phone = document.getElementById("patient-phone").value.trim();
 
+if (phone && !/^\+[1-9]\d{10,14}$/.test(phone)) {
+
+  showToast(
+    "⚠️ Use valid format like +919834131522",
+    "warn"
+  );
+
+  return;
+}   
       btn.textContent = "Saving...";
       btn.disabled = true;
 
@@ -465,7 +475,10 @@
         status: document.getElementById("entry-status").value,
         doctorName: document.getElementById("doctor-name").value.trim(),
         dosage: document.getElementById("dosage").value.trim(),
-        phone: document.getElementById("patient-phone").value.trim()
+        phone: document.getElementById("patient-phone")
+  .value
+  .replace(/\s+/g, "")
+  .trim()
       };
 
       try {
@@ -501,53 +514,88 @@
       btn.disabled = false;
     }
 
+
+    function formatPhone(phone) {
+
+  if (!phone) return "";
+
+  // remove spaces, dashes etc
+  phone = String(phone).replace(/\D/g, "");
+
+  // Indian number without country code
+  if (phone.length === 10) {
+    return "+91" + phone;
+  }
+
+  // Indian number with 91
+  if (phone.length === 12 && phone.startsWith("91")) {
+    return "+" + phone;
+  }
+
+  // already correct
+  if (phone.startsWith("+91") && phone.length === 13) {
+    return phone;
+  }
+
+  return phone;
+}
 // ════════════════════════════════════════════════════════
 //  GOOGLE CALENDAR LINK  (FIXED)
 // ════════════════════════════════════════════════════════
 function makeGCalLink(log) {
 
-  try {
+  console.log("Calendar Log:", log);
 
-    if (!log || !log.date) return "#";
-
-    let safeTime = "09:00";
-
-    if (
-      log.time &&
-      /^\d{2}:\d{2}$/.test(log.time)
-    ) {
-      safeTime = log.time;
-    }
-
-    const start = new Date(`${log.date}T${safeTime}:00`);
-
-    if (isNaN(start.getTime())) {
-      console.error("Invalid calendar date:", log);
-      return "#";
-    }
-
-    const end = new Date(start.getTime() + 3600000);
-
-    const fmt = d =>
-      d.toISOString()
-        .replace(/[-:]/g, "")
-        .replace(/\.\d{3}/, "");
-
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE`
-      + `&text=${encodeURIComponent(log.title || "Appointment")}`
-      + `&dates=${fmt(start)}/${fmt(end)}`
-      + `&details=${encodeURIComponent(
-        "Doctor: " + (log.doctorName || "N/A") + "\n" + (log.notes || "")
-      )}`;
-
-  } catch (err) {
-
-    console.error("Calendar link error:", err);
-
+  if (!log || typeof log !== "object") {
+    console.error("Invalid log object");
     return "#";
   }
-}
 
+  const title = log.title || "Appointment";
+  const date = log.date;
+  const time = log.time || "09:00";
+  const notes = log.notes || "";
+  const doctorName = log.doctorName || "";
+
+  if (!date || typeof date !== "string") {
+    console.error("Invalid date:", log);
+    return "#";
+  }
+
+  // Ensure proper datetime
+  const dt = new Date(`${date}T${time}:00`);
+
+  if (isNaN(dt.getTime())) {
+    console.error("Invalid datetime:", date, time);
+    return "#";
+  }
+
+  // Add 1 hour duration
+  const end = new Date(dt.getTime() + 60 * 60 * 1000);
+
+  // Format for Google Calendar
+  const fmt = (d) =>
+    d.toISOString().replace(/[-:]/g, "").split(".")[0];
+
+  const startStr = fmt(dt);
+  const endStr = fmt(end);
+
+  const details =
+    `Doctor: ${doctorName}\n\n` +
+    `Patient: ${log.patientName || ""}\n\n` +
+    `Notes:\n${notes}`;
+
+  const url =
+    `https://calendar.google.com/calendar/u/0/r/eventedit` +
+    `?text=${encodeURIComponent(title)}` +
+    `&dates=${startStr}/${endStr}` +
+    `&details=${encodeURIComponent(details)}` +
+    `&location=${encodeURIComponent("Hospital / Clinic")}`;
+
+  console.log(url);
+
+  return url;
+}
     // ════════════════════════════════════════════════════════
     //  AI SUMMARY  (via GET)
     // ════════════════════════════════════════════════════════
@@ -861,7 +909,7 @@ function fmtTime(t) {
       const safeId = escAttr(log.id);
 
       const calBtn = isAppt && log.date
-        ? `<a href="${makeGCalLink(log)}" target="_blank" rel="noopener" class="btn-xs outline">📅 Calendar</a>` : "";
+        ? `<a href="${makeGCalLink(log)}" target="_blank" rel="noopener noreferrer" class="btn-xs outline">📅 Calendar</a>` : "";
       const aiBtn = log.summary
         ? `<button onclick="showSummary('${safeId}')" class="btn-xs info">🤖 View Summary</button>`
         : (isAppt ? `<button onclick="generateSummaryForLog('${safeId}')" class="btn-xs outline">🤖 AI Summary</button>` : "");
@@ -932,7 +980,8 @@ function fmtTime(t) {
       try {
         const result = await api({ action: "generateSummary", ...log });
         if (result.status === "success") {
-          log.summary = result.summary;
+          log.summary = result.summary || "No summary generated.";
+          renderAllLogs(allLogs);
           showSummary(id);
           filterLogs();
           showToast("✅ AI summary generated!", "success");
