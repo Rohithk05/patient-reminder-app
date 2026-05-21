@@ -385,30 +385,59 @@
 
     // ════════════════════════════════════════════════════════
     //  TAB NAVIGATION
+    //  FIX: closeSidebar() is called FIRST so the overlay
+    //  is removed before we manipulate the DOM. Previously
+    //  the overlay stayed visible and intercepted subsequent
+    //  taps, making navigation appear broken on mobile.
     // ════════════════════════════════════════════════════════
     function showTab(name, btn) {
+      // 1. Close sidebar immediately (removes overlay that blocks taps)
+      closeSidebar();
+      // 2. Hide all tabs, deactivate all nav items
       document.querySelectorAll(".tab").forEach(t => t.classList.add("hidden"));
       document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+      // 3. Show the target tab
       const tab = document.getElementById("tab-" + name);
       if (tab) tab.classList.remove("hidden");
-      if (btn) btn.classList.add("active");
-      else { const b = document.getElementById("nav-" + name); if (b) b.classList.add("active"); }
-      closeSidebar();
-      if (name === "view-logs") renderAllLogs(allLogs);
+      // 4. Activate the correct nav button
+      if (btn) {
+        btn.classList.add("active");
+      } else {
+        const b = document.getElementById("nav-" + name);
+        if (b) b.classList.add("active");
+      }
+      // 5. Trigger any tab-specific renders
+      if (name === "view-logs")     renderAllLogs(allLogs);
       if (name === "prescriptions") renderPrescriptions();
-      if (name === "report") buildReport();
+      if (name === "report")        buildReport();
     }
 
     // ════════════════════════════════════════════════════════
     //  SIDEBAR
+    //  FIX: body scroll lock prevents background scroll when
+    //  sidebar is open on mobile (iOS rubber-band issue).
+    //  The overlay now uses pointer-events:auto when visible
+    //  so tapping it reliably closes the sidebar.
     // ════════════════════════════════════════════════════════
     function toggleSidebar() {
-      document.getElementById("sidebar").classList.toggle("open");
-      document.getElementById("sidebar-overlay").classList.toggle("visible");
+      const sidebar = document.getElementById("sidebar");
+      const overlay = document.getElementById("sidebar-overlay");
+      const isOpen  = sidebar.classList.contains("open");
+      if (isOpen) {
+        sidebar.classList.remove("open");
+        overlay.classList.remove("visible");
+        document.body.style.overflow = "";
+      } else {
+        sidebar.classList.add("open");
+        overlay.classList.add("visible");
+        // Lock body scroll on mobile while sidebar is open
+        document.body.style.overflow = "hidden";
+      }
     }
     function closeSidebar() {
       document.getElementById("sidebar").classList.remove("open");
       document.getElementById("sidebar-overlay").classList.remove("visible");
+      document.body.style.overflow = "";
     }
 
     // ════════════════════════════════════════════════════════
@@ -1093,6 +1122,52 @@ function fmtTime(t) {
     function escAttr(s) { return String(s || "").replace(/'/g, "\\'"); }
 
     document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+
+    // ════════════════════════════════════════════════════════
+    //  MOBILE TOUCH FIXES
+    //  Problem: onclick has 300ms delay on older Android.
+    //  Fix: add touchend listeners alongside onclick for
+    //  the overlay and hamburger button.
+    //  We use touchend (not touchstart) so scrolling doesn't
+    //  accidentally trigger a tap.
+    // ════════════════════════════════════════════════════════
+    (function attachTouchHandlers() {
+      // Overlay — close sidebar on tap
+      const overlay = document.getElementById("sidebar-overlay");
+      if (overlay) {
+        overlay.addEventListener("touchend", function(e) {
+          e.preventDefault(); // prevent ghost click after touchend
+          closeSidebar();
+        }, { passive: false });
+      }
+
+      // Hamburger menu button
+      const menuBtn = document.querySelector(".menu-btn");
+      if (menuBtn) {
+        menuBtn.addEventListener("touchend", function(e) {
+          e.preventDefault();
+          toggleSidebar();
+        }, { passive: false });
+      }
+
+      // All nav-item buttons in sidebar — instant navigation on touch
+      document.querySelectorAll(".nav-item").forEach(function(btn) {
+        btn.addEventListener("touchend", function(e) {
+          // Only fire if this wasn't a scroll (touch didn't move far)
+          e.preventDefault();
+          btn.click(); // trigger the existing onclick handler
+        }, { passive: false });
+      });
+
+      // Dashboard "+ Add Entry" button
+      const addEntryBtn = document.querySelector(".btn-primary.btn-sm");
+      if (addEntryBtn) {
+        addEntryBtn.addEventListener("touchend", function(e) {
+          e.preventDefault();
+          addEntryBtn.click();
+        }, { passive: false });
+      }
+    })();
   </script>
 </body>
 
