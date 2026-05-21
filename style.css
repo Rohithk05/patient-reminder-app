@@ -50,6 +50,12 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Prevent iOS Safari from zooming in when tapping inputs.
+   Safari zooms when input font-size < 16px. We target mobile only. */
+@media (max-width: 768px) {
+  input, select, textarea { font-size: 16px !important; }
+}
+
 .hidden { display: none !important; }
 
 /* ── SCROLLBAR ── */
@@ -1164,45 +1170,195 @@ html, body {
 }
 
 /* ════════════════════════════════════════
-   RESPONSIVE — MOBILE
+   RESPONSIVE — MOBILE  (768px and below)
+   KEY FIXES:
+   1. app height = 100dvh so address bar doesn't clip content
+   2. main-content scrolls, not the individual tab
+   3. sidebar slides in over content with proper z-index
+   4. all tap targets min 44px (Apple HIG / Google MDC)
+   5. filter bar stacks vertically on small screens
+   6. log action buttons wrap cleanly
+   7. form fills full width
 ════════════════════════════════════════ */
 @media (max-width: 768px) {
-  .topbar { display: flex; }
+  /* Use dvh so content isn't clipped by mobile browser chrome */
+  html, body { height: 100%; overflow: hidden; }
 
+  .app {
+    height: 100dvh;
+    height: -webkit-fill-available; /* Safari fallback */
+    overflow: hidden;
+    flex-direction: column;
+  }
+
+  /* Topbar shows on mobile */
+  .topbar {
+    display: flex;
+    flex-shrink: 0;
+    height: 52px;
+  }
+
+  /* Hamburger tap target */
+  .menu-btn {
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Sidebar slides in from left over content */
   .sidebar {
     position: fixed;
-    left: 0; top: 0; bottom: 0;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    height: 100dvh;
+    width: 80vw;
+    max-width: 300px;
     transform: translateX(-100%);
     box-shadow: var(--shadow-lg);
+    z-index: 300;          /* above overlay */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .sidebar.open { transform: translateX(0); }
-  .sidebar-overlay { display: block; }
 
-  .main-content { overflow-y: auto; }
-
-  .tab {
-    padding: 1.25rem 1rem;
-    overflow-y: unset;
+  /* Dark overlay behind open sidebar */
+  .sidebar-overlay {
+    display: block;
+    z-index: 250;
   }
 
-  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
-  .form-card { padding: 1.25rem; }
-  .form-grid { grid-template-columns: 1fr; }
+  /* Main area scrolls on mobile */
+  .main-content {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    display: block;        /* not flex column — lets tab fill normally */
+  }
+
+  /* Tab is just a normal block — no internal scroll */
+  .tab {
+    padding: 1rem 0.875rem 2rem; /* bottom padding so last card clears */
+    overflow-y: visible;
+    overflow-x: hidden;
+    display: block;
+    flex: none;
+  }
+
+  /* Stats: 2-column grid */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+  }
+  .stat-card { padding: 1rem 0.75rem; }
+  .stat-num  { font-size: 1.75rem; }
+
+  /* Dashboard two-col collapses to single column */
+  .two-col-grid { grid-template-columns: 1fr; gap: 1rem; }
+
+  /* Page header stacks */
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    margin-bottom: 1.25rem;
+  }
+  .page-header h2 { font-size: 1.35rem; }
+
+  /* Form card full width, less padding */
+  .form-card {
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    max-width: 100%;
+  }
+  .form-grid { grid-template-columns: 1fr; gap: 0.85rem; }
   .form-group.full { grid-column: 1; }
-  .filter-bar { gap: 0.5rem; }
-  .filter-bar select { flex: 1; }
-  .post-save-btns { flex-direction: column; }
-  .post-save-btns .btn-outline { text-align: center; }
-  .page-header { flex-direction: column; align-items: flex-start; }
-  .report-table { font-size: 0.72rem; }
+
+  /* Inputs: minimum 44px tap height */
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    font-size: 1rem;          /* prevents iOS auto-zoom on focus */
+    min-height: 44px;
+    padding: 0.7rem 0.85rem;
+  }
+
+  /* Filter bar stacks on small screens */
+  .filter-bar {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+  .search-wrap { min-width: unset; width: 100%; }
+  .search-wrap input[type="search"] { font-size: 1rem; }
+  .filter-bar select { width: 100%; min-height: 44px; font-size: 1rem; }
+
+  /* Log action buttons: ensure min tap size */
+  .btn-xs {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.78rem;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .log-actions { gap: 0.35rem; flex-wrap: wrap; }
+
+  /* Post-save panel: stack buttons */
+  .post-save-btns {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .post-save-btns .btn-outline {
+    text-align: center;
+    width: 100%;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Nav items: slightly larger touch target */
+  .nav-item { padding: 0.75rem 0.875rem; min-height: 44px; }
+  .nav-tool-btn { min-height: 44px; }
+
+  /* Sidebar lock btn */
+  .nav-footer { padding-top: 1rem; }
+
+  /* Report table scrolls horizontally */
+  .report-container { padding: 1rem; }
+  .report-section { overflow-x: auto; }
+  .report-table { font-size: 0.72rem; min-width: 480px; }
   .report-table th, .report-table td { padding: 0.4rem 0.5rem; }
+  .report-stats-row { grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
+
+  /* Modal: nearly full screen on mobile */
+  .modal {
+    max-height: 92dvh;
+    margin: 0;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    align-self: flex-end; /* slides up from bottom */
+  }
+  .modal-overlay { align-items: flex-end; padding: 0; }
+
+  /* Sort wrap in log count bar */
+  .log-count-bar { flex-direction: column; align-items: flex-start; gap: 0.4rem; }
+  .sort-wrap select { min-height: 40px; font-size: 0.9rem; }
+
+  /* Compliance bar label */
+  .compliance-label { font-size: 0.78rem; }
 }
 
-@media (max-width: 480px) {
-  .stats-grid { grid-template-columns: repeat(2, 1fr); }
-  .stat-num { font-size: 1.7rem; }
-  .log-actions { gap: 0.3rem; }
-  .modal { max-height: 90vh; }
+/* Very small phones (iPhone SE, Galaxy A, etc.) */
+@media (max-width: 380px) {
+  .stats-grid { gap: 0.4rem; }
+  .stat-card { padding: 0.75rem 0.5rem; }
+  .stat-num  { font-size: 1.5rem; }
+  .stat-icon { font-size: 1.3rem; }
+  .tab { padding: 0.875rem 0.75rem 2rem; }
+  .form-card { padding: 0.875rem; }
+  .log-card { padding: 0.875rem 1rem; }
+  .btn-xs { font-size: 0.72rem; padding: 0.35rem 0.55rem; }
 }
 
 /* ════════════════════════════════════════
