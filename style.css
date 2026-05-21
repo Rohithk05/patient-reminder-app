@@ -4,6 +4,15 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* FIX: Remove 300ms tap delay globally on all interactive elements.
+   touch-action: manipulation tells the browser "no double-tap to zoom"
+   so it fires click immediately without waiting. This is the single
+   biggest mobile UX fix — buttons feel instant instead of sluggish. */
+button, a, input, select, textarea, [role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 :root {
   --primary:     #0EA5E9;
   --primary-dk:  #0284C7;
@@ -283,6 +292,8 @@ html, body {
   z-index: 200;
   overflow-y: auto;
   transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
+  /* Prevent sidebar itself from being blocked by overlay on desktop */
+  position: relative;
 }
 
 .nav-brand {
@@ -333,6 +344,12 @@ html, body {
   cursor: pointer;
   text-align: left;
   transition: all var(--ease);
+  /* FIX: removes 300ms tap delay on mobile browsers */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  /* Ensure the button itself is always tappable */
+  position: relative;
+  z-index: 1;
 }
 .nav-item:hover { background: var(--bg); color: var(--primary); }
 .nav-item.active {
@@ -369,16 +386,26 @@ html, body {
 .nav-tool-btn.danger:hover { background: var(--danger-lt); color: var(--danger-dk); }
 
 /* ── SIDEBAR OVERLAY (mobile) ── */
+/* FIX: was display:none — overlay was invisible AND unclickable even
+   when "visible" class added. display:none removes element from layout
+   entirely so opacity alone can't restore interactivity.
+   Solution: always keep it via position:fixed, use pointer-events
+   to control tappability, opacity for appearance. */
 .sidebar-overlay {
-  display: none;
+  display: block;
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.4);
-  z-index: 150;
+  z-index: 250;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.22s ease;
+  -webkit-tap-highlight-color: transparent;
 }
-.sidebar-overlay.visible { opacity: 1; }
+.sidebar-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
 
 /* ── MAIN CONTENT ── */
 .main-content {
@@ -411,6 +438,13 @@ html, body {
   flex-direction: column;
   gap: 5px;
   padding: 4px;
+  /* FIX: min 44x44px touch target, instant response */
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .menu-btn span {
   display: block;
@@ -705,6 +739,8 @@ html, body {
   cursor: pointer;
   transition: opacity var(--ease), transform var(--ease), box-shadow var(--ease);
   box-shadow: 0 2px 8px rgba(14,165,233,0.3);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .btn-primary:hover { opacity: 0.92; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(14,165,233,0.35); }
 .btn-primary:active { transform: scale(0.98); }
@@ -1217,17 +1253,11 @@ html, body {
     max-width: 300px;
     transform: translateX(-100%);
     box-shadow: var(--shadow-lg);
-    z-index: 300;          /* above overlay */
+    z-index: 300;          /* above overlay (250) */
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
   .sidebar.open { transform: translateX(0); }
-
-  /* Dark overlay behind open sidebar */
-  .sidebar-overlay {
-    display: block;
-    z-index: 250;
-  }
 
   /* Main area scrolls on mobile */
   .main-content {
