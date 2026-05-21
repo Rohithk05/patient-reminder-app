@@ -61,9 +61,6 @@ html, body {
 
 /* Prevent iOS Safari from zooming in when tapping inputs.
    Safari zooms when input font-size < 16px. We target mobile only. */
-@media (max-width: 768px) {
-  input, select, textarea { font-size: 16px !important; }
-}
 
 .hidden { display: none !important; }
 
@@ -1400,4 +1397,72 @@ html, body {
   .report-container { box-shadow: none; border: none; padding: 0; }
   body { background: white; }
   .report-table th { background: #f0f0f0 !important; -webkit-print-color-adjust: exact; }
+}
+
+/* =========================================
+   EXTRA MOBILE FIXES
+========================================= */
+
+html,
+body {
+  overflow-x: hidden;
+}
+
+/* Better mobile click handling */
+button,
+a,
+.nav-item,
+.type-btn,
+.btn-primary,
+.btn-ghost,
+.btn-outline {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Fix mobile repaint issue */
+.tab {
+  will-change: transform;
+}
+
+/* Better touch scrolling */
+.main-content,
+.sidebar,
+.tab {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fix hidden tap issue */
+.hidden {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* Prevent sidebar layering bugs */
+.sidebar {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Fix buttons on mobile */
+@media (max-width: 768px) {
+
+  .btn-primary,
+  .btn-ghost,
+  .btn-outline {
+    min-height: 44px;
+  }
+
+  .nav-item {
+    min-height: 48px;
+  }
+
+  .type-btn {
+    min-height: 48px;
+  }
+
+  .tab {
+    min-height: calc(100vh - 52px);
+  }
 }
