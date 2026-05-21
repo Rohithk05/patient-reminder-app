@@ -94,7 +94,8 @@
             <h2>Health Dashboard</h2>
             <p class="page-sub">Your health at a glance</p>
           </div>
-          <button onclick="showTab('add-log', document.getElementById('nav-add-log'))" class="btn-primary btn-sm">+ Add
+          <button type="button"
+onclick="showTab('add-log', document.getElementById('nav-add-log'))" class="btn-primary btn-sm">+ Add
             Entry</button>
         </div>
 
@@ -391,26 +392,62 @@
     //  taps, making navigation appear broken on mobile.
     // ════════════════════════════════════════════════════════
     function showTab(name, btn) {
-      // 1. Close sidebar immediately (removes overlay that blocks taps)
-      closeSidebar();
-      // 2. Hide all tabs, deactivate all nav items
-      document.querySelectorAll(".tab").forEach(t => t.classList.add("hidden"));
-      document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
-      // 3. Show the target tab
-      const tab = document.getElementById("tab-" + name);
-      if (tab) tab.classList.remove("hidden");
-      // 4. Activate the correct nav button
-      if (btn) {
-        btn.classList.add("active");
-      } else {
-        const b = document.getElementById("nav-" + name);
-        if (b) b.classList.add("active");
-      }
-      // 5. Trigger any tab-specific renders
-      if (name === "view-logs")     renderAllLogs(allLogs);
-      if (name === "prescriptions") renderPrescriptions();
-      if (name === "report")        buildReport();
+
+  // Close sidebar first
+  closeSidebar();
+
+  // Hide all tabs
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.classList.add("hidden");
+  });
+
+  // Remove active nav state
+  document.querySelectorAll(".nav-item").forEach(item => {
+    item.classList.remove("active");
+  });
+
+  // Show selected tab
+  const activeTab = document.getElementById("tab-" + name);
+
+  if (activeTab) {
+
+    activeTab.classList.remove("hidden");
+
+    // Force mobile repaint
+    activeTab.style.display = "none";
+    activeTab.offsetHeight;
+    activeTab.style.display = "block";
+
+    // Scroll top
+    window.scrollTo(0, 0);
+
+    activeTab.scrollTop = 0;
+  }
+
+  // Activate sidebar button
+  if (btn) {
+    btn.classList.add("active");
+  } else {
+    const navBtn = document.getElementById("nav-" + name);
+
+    if (navBtn) {
+      navBtn.classList.add("active");
     }
+  }
+
+  // Render tab content
+  if (name === "view-logs") {
+    renderAllLogs(allLogs);
+  }
+
+  if (name === "prescriptions") {
+    renderPrescriptions();
+  }
+
+  if (name === "report") {
+    buildReport();
+  }
+}
 
     // ════════════════════════════════════════════════════════
     //  SIDEBAR
@@ -420,25 +457,46 @@
     //  so tapping it reliably closes the sidebar.
     // ════════════════════════════════════════════════════════
     function toggleSidebar() {
-      const sidebar = document.getElementById("sidebar");
-      const overlay = document.getElementById("sidebar-overlay");
-      const isOpen  = sidebar.classList.contains("open");
-      if (isOpen) {
-        sidebar.classList.remove("open");
-        overlay.classList.remove("visible");
-        document.body.style.overflow = "";
-      } else {
-        sidebar.classList.add("open");
-        overlay.classList.add("visible");
-        // Lock body scroll on mobile while sidebar is open
-        document.body.style.overflow = "hidden";
-      }
-    }
-    function closeSidebar() {
-      document.getElementById("sidebar").classList.remove("open");
-      document.getElementById("sidebar-overlay").classList.remove("visible");
-      document.body.style.overflow = "";
-    }
+
+  const sidebar = document.getElementById("sidebar");
+
+  const overlay = document.getElementById("sidebar-overlay");
+
+  const isOpen = sidebar.classList.contains("open");
+
+  if (isOpen) {
+
+    sidebar.classList.remove("open");
+
+    overlay.classList.remove("visible");
+
+    document.body.style.overflow = "";
+
+    document.documentElement.style.overflow = "";
+
+  } else {
+
+    sidebar.classList.add("open");
+
+    overlay.classList.add("visible");
+
+    document.body.style.overflow = "hidden";
+
+    document.documentElement.style.overflow = "hidden";
+  }
+}
+function closeSidebar() {
+
+  document.getElementById("sidebar")
+    .classList.remove("open");
+
+  document.getElementById("sidebar-overlay")
+    .classList.remove("visible");
+
+  document.body.style.overflow = "";
+
+  document.documentElement.style.overflow = "";
+}
 
     // ════════════════════════════════════════════════════════
     //  FORM TYPE TOGGLE
@@ -1168,6 +1226,32 @@ function fmtTime(t) {
         }, { passive: false });
       }
     })();
+
+    // Mobile browser touch fix
+document.addEventListener(
+  "touchstart",
+  function () {},
+  true
+);
+
+// Prevent double-tap zoom
+let lastTouchEnd = 0;
+
+document.addEventListener(
+  "touchend",
+  function (event) {
+
+    const now = Date.now();
+
+    if (now - lastTouchEnd <= 300) {
+      event.preventDefault();
+    }
+
+    lastTouchEnd = now;
+
+  },
+  false
+);
   </script>
 </body>
 
