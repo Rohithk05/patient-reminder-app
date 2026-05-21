@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover" />
   <title>RK Health – Patient Reminder Assistant</title>
   <meta name="description" content="Patient Appointment & Medication Reminder – RK Health" />
   <link rel="manifest" href="manifest.json" />
@@ -66,8 +66,6 @@
 
       <div class="nav-section-label" style="margin-top:auto;padding-top:1rem">TOOLS</div>
       <div class="nav-footer">
-        <button onclick="exportCSV()" class="nav-tool-btn">⬇ Export CSV</button>
-        <button onclick="refreshAll()" class="nav-tool-btn">↺ Refresh</button>
         <button onclick="lockApp()" class="nav-tool-btn danger">🔒 Lock App</button>
       </div>
     </nav>
@@ -83,7 +81,7 @@
           <span></span><span></span><span></span>
         </button>
         <span class="topbar-title">🏥 RK Health</span>
-        <button class="topbar-refresh" onclick="refreshAll()" aria-label="Refresh">↺</button>
+        <div style="width:40px"></div>
       </header>
 
       <!-- TOAST -->
@@ -238,7 +236,6 @@
             <h2>All Health Logs</h2>
             <p class="page-sub">Search, filter, and manage all records</p>
           </div>
-          <button onclick="exportCSV()" class="btn-outline btn-sm">⬇ Export CSV</button>
         </div>
         <div class="filter-bar">
           <div class="search-wrap">
@@ -333,7 +330,7 @@
     // ════════════════════════════════════════════════════════
     //  ▼▼▼  PASTE YOUR APPS SCRIPT URL HERE  ▼▼▼
     // ════════════════════════════════════════════════════════
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxcBdRJLakKs0C9DkU7fBFTqdm2EJ5zRI60w7B5n7lUdgSVxTrex8Xa5rpjMynMjZI8/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyVUKlVbFrKxe8hkGha-q_Ba6caDE1uxb_uRBd6tXW-RwhJqfmeJPc6srSQ8Z_us_KuBw/exec";
     //  ▲▲▲  URL is hardcoded — no setup wizard needed  ▲▲▲
 
     const PASSPHRASE = "health2026";
